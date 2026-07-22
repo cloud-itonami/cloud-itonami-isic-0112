@@ -7,34 +7,26 @@
   hand-typed mockup.
 
   This namespace drives a genuine multi-disposition scenario through
-  `riceops.operation/run-operation` (advisor -> governor -> phase gate,
-  the SAME `riceops.store/MemStore` seed data any operator would
-  register), covering: auto-commits, an always-escalate op resolved by
-  a recorded human sign-off, a high-cost escalate left pending, and
-  four DISTINCT real HARD-hold reasons -- all real ids/ops native to
-  THIS repo (`riceops.governor`'s own field-id/allowlist/blocked-op/
-  water-level/acreage rules), never copied from another cloud-itonami
-  vertical.
+  the compiled `riceops.operation/build` `langgraph-clj` StateGraph
+  (advisor -> governor -> phase gate -> commit | request-approval ->
+  commit | hold, the SAME `riceops.store/MemStore` seed data any
+  operator would register), covering: auto-commits, an always-escalate
+  op ACTUALLY resolved by resuming the interrupted graph
+  (`interrupt-before #{:request-approval}` + checkpoint-based resume,
+  same as `riceops.sim`), a high-cost escalate left pending
+  (interrupted, never resumed), and four DISTINCT real HARD-hold
+  reasons -- all real ids/ops native to THIS repo (`riceops.governor`'s
+  own field-id/allowlist/blocked-op/water-level/acreage rules), never
+  copied from another cloud-itonami vertical.
 
-  IMPORTANT HONESTY NOTE: unlike some sibling actors in this fleet,
-  `riceops.operation` is currently a SYNCHRONOUS STUB -- it has no
-  langgraph-clj StateGraph wiring, so there is no `interrupt-before`/
-  checkpoint `resume` API yet (see its own docstring: 'production
-  wiring ... is deferred'). This renderer therefore does NOT fabricate
-  a second governor pass to represent human sign-off on an escalation
-  -- the Governor's `:flag-crop-health-concern` op ALWAYS escalates by
-  design (`riceops.governor/always-escalate-ops`), by construction,
-  regardless of phase or resubmission, so re-running it would just
-  escalate again. Instead, the one escalation this demo resolves is
-  shown with an explicit, separately-labeled `human-sign-off` record
-  (not a `riceops.operation` return value) representing the farm
-  operator's out-of-band decision -- exactly the deferred production
-  step `run-operation`'s own docstring describes ('the approver
-  resumes the pending request once a decision is made'). Every
-  disposition (:commit/:escalate/:hold) and every violation reason
-  come from a REAL `run-operation` call; only the post-escalation
-  sign-off annotation is renderer-authored, and it is labeled as such
-  in the output.
+  Every disposition (:commit/:escalate/:hold) and every violation
+  reason come from a REAL `langgraph.graph/run*` call against the real
+  compiled StateGraph -- including the escalation resolution below,
+  which is a genuine checkpoint resume (`:resume? true`), not a
+  fabricated record. The only renderer-authored text is the human
+  reviewer's free-text `:note` (e.g. what the agronomist actually said)
+  -- the approval decision itself, `:by`, and the resulting `:commit`
+  disposition all come straight out of the resumed graph state.
 
   Output is fully deterministic: no timestamps, no randomness, no
   external I/O in the rendered content -- reruns against this same
@@ -45,6 +37,7 @@
   Usage: `clojure -M:dev:render-html [out-file]`
   (default `docs/samples/operator-console.html`)."
   (:require [clojure.string :as str]
+            [langgraph.graph :as g]
             [riceops.facts :as facts]
             [riceops.governor :as governor]
             [riceops.operation :as op]
@@ -68,63 +61,78 @@
 (defn- run-op! [actor label request]
   {:label label
    :request request
-   :result (actor request operator-context)})
+   :result (:state (g/run* actor {:request request :context operator-context}
+                          {:thread-id label}))})
 
 (defn run-demo!
-  "Drives 8 requests through the REAL actor (`riceops.operation/build`
-  over a freshly seeded `riceops.store/MemStore`): 2 clean requests
-  that auto-commit, 1 always-escalate crop-health concern (resolved
-  below via a labeled human sign-off record), 1 high-cost supply order
-  left pending, and 4 requests that each independently trip a
-  DIFFERENT real Governor HARD-hold rule. Returns the ordered vector of
-  `{:label :request :result}` runs -- every `:result` is a real
-  `run-operation` return value."
-  []
-  (let [st (seed-store)
-        actor (op/build st)]
-    [(run-op! actor "commit-1-log-record"
-           {:op :log-field-record :field-id "paddy-001"
-            :acreage 12.5 :water-level 5 :variety "japonica"
-            :record-type "planting"})
+  "Drives 8 requests through the REAL compiled StateGraph
+  (`riceops.operation/build` over a freshly seeded
+  `riceops.store/MemStore`): 2 clean requests that auto-commit, 1
+  always-escalate crop-health concern (resolved below via a genuine
+  checkpoint resume), 1 high-cost supply order left pending
+  (interrupted, never resumed), and 4 requests that each independently
+  trip a DIFFERENT real Governor HARD-hold rule. Returns the ordered
+  vector of `{:label :request :result}` runs -- every `:result` is a
+  real `langgraph.graph/run*` state."
+  [actor]
+  [(run-op! actor "commit-1-log-record"
+         {:op :log-field-record :field-id "paddy-001"
+          :acreage 12.5 :water-level 5 :variety "japonica"
+          :record-type "planting"})
 
-     (run-op! actor "commit-2-schedule-drainage"
-           {:op :schedule-field-operation :field-id "paddy-002"
-            :operation-type "midseason-drainage"
-            :requested-date "2026-08-02"
-            :reason "midseason aeration per variety schedule"})
+   (run-op! actor "commit-2-schedule-drainage"
+         {:op :schedule-field-operation :field-id "paddy-002"
+          :operation-type "midseason-drainage"
+          :requested-date "2026-08-02"
+          :reason "midseason aeration per variety schedule"})
 
-     (run-op! actor "escalate-1-crop-health-concern"
-           {:op :flag-crop-health-concern :field-id "paddy-002"
-            :concern "blast fungus lesions on lower leaves, sector B; drought-stressed edge rows"})
+   (run-op! actor "escalate-1-crop-health-concern"
+         {:op :flag-crop-health-concern :field-id "paddy-002"
+          :concern "blast fungus lesions on lower leaves, sector B; drought-stressed edge rows"})
 
-     (run-op! actor "escalate-2-high-cost-supply-order"
-           {:op :order-supplies :field-id "paddy-003"
-            :category "equipment" :cost 1200})
+   (run-op! actor "escalate-2-high-cost-supply-order"
+         {:op :order-supplies :field-id "paddy-003"
+          :category "equipment" :cost 1200})
 
-     (run-op! actor "hold-1-field-not-registered"
-           {:op :log-field-record :field-id "paddy-099"
-            :acreage 5 :water-level 3})
+   (run-op! actor "hold-1-field-not-registered"
+         {:op :log-field-record :field-id "paddy-099"
+          :acreage 5 :water-level 3})
 
-     (run-op! actor "hold-2-irrigation-equipment-blocked"
-           {:op :operate-irrigation-equipment :field-id "paddy-001"
-            :note "pump valve override request"})
+   (run-op! actor "hold-2-irrigation-equipment-blocked"
+         {:op :operate-irrigation-equipment :field-id "paddy-001"
+          :note "pump valve override request"})
 
-     (run-op! actor "hold-3-op-not-allowed"
-           {:op :inspect-drone-flyover :field-id "paddy-001"})
+   (run-op! actor "hold-3-op-not-allowed"
+         {:op :inspect-drone-flyover :field-id "paddy-001"})
 
-     (run-op! actor "hold-4-water-level-invalid"
-           {:op :log-field-record :field-id "paddy-003"
-            :acreage 6 :water-level -1.5})]))
+   (run-op! actor "hold-4-water-level-invalid"
+         {:op :log-field-record :field-id "paddy-003"
+          :acreage 6 :water-level -1.5})])
 
-(def ^:private human-sign-offs
-  "The out-of-band human decisions this demo resolves. Keyed by run
-  `:label`. See the namespace docstring's HONESTY NOTE: this is NOT a
-  second `run-operation`/governor pass -- there is no resume API in
-  this repo's actor yet -- it is a labeled record of the farm
-  operator's real-world decision after the escalation above."
+(def ^:private human-notes
+  "Free-text context a human reviewer supplied alongside their REAL
+  approval decision below -- this is NOT part of the actor's own
+  output, just the record of what the farmer/agronomist actually said
+  when reviewing the escalation. Keyed by run `:label`."
   {"escalate-1-crop-health-concern"
-   {:decision :approved :by "op-1" :role :farm-operator
-    :note "agronomist consult confirmed blast fungus; fungicide treatment dispatch approved"}})
+   "agronomist consult confirmed blast fungus; fungicide treatment dispatch approved"})
+
+(defn- resolve-approval!
+  "Actually RESUMES the interrupted graph run for `label` via
+  `langgraph.graph/run*` with `:resume? true` against the SAME
+  `thread-id` the original escalation ran under -- a genuine
+  checkpoint resume through `riceops.operation/build`'s
+  `interrupt-before #{:request-approval}` gate, not a fabricated
+  record. `:by`/`:role` and the resulting `:disposition :commit` come
+  straight out of the resumed graph state; only `:note` is
+  renderer-authored (see `human-notes`)."
+  [actor label by]
+  {:label label
+   :by by
+   :role :farm-operator
+   :note (get human-notes label)
+   :result (:state (g/run* actor {:approval {:status :approved :by by}}
+                          {:thread-id label :resume? true}))})
 
 ;; ----------------------------- rendering -----------------------------
 
@@ -145,9 +153,9 @@
   "Human-readable basis for a run's disposition. For :escalate, the raw
   `disposition-fact`'s `:reason` is `:always-escalate` for BOTH a
   literal always-escalate op AND a high-stakes high-cost order (see
-  `riceops.operation/run-operation`'s `cond` -- `:high-stakes?`
-  collapses both into the same reason keyword); we disambiguate using
-  the real, independently-checkable governor data
+  `riceops.operation`'s `:decide` node -- `:high-stakes?` collapses
+  both into the same reason keyword); we disambiguate using the real,
+  independently-checkable governor data
   (`riceops.governor/always-escalate-ops` membership + the request's
   own `:cost`) rather than inventing new wording."
   [{:keys [request result]}]
@@ -180,10 +188,11 @@
                 (format "        <tr><td>%s</td><td><code>%s</code></td><td><code>%s</code></td><td>%s</td></tr>"
                         (esc label) (esc (name (:op request))) (esc (name (:rule v))) (esc (:detail v)))))))
 
-(defn- sign-off-row [[label {:keys [decision by role note]}]]
+(defn- sign-off-row [{:keys [label by role note result]}]
   (format "        <tr><td>%s</td><td>%s</td><td>%s (%s)</td><td>%s</td></tr>"
           (esc label)
-          (if (= decision :approved) "<span class=\"ok\">approved</span>" "<span class=\"muted\">pending</span>")
+          (if (= :commit (:disposition result))
+            "<span class=\"ok\">approved</span>" "<span class=\"muted\">pending</span>")
           (esc by) (esc (name role)) (esc note)))
 
 (defn- pending-escalation-row [{:keys [label] :as run}]
@@ -207,17 +216,18 @@
   (format "        <tr><td>%s</td><td>%d</td></tr>" (esc name) cost-threshold))
 
 (defn render
-  "Renders the full operator-console.html document from the ordered
-  vector `runs` (`run-demo!`'s return value)."
-  [runs]
+  "Renders the full operator-console.html document from `runs`
+  (`run-demo!`'s return value) and `approvals`
+  (`resolve-approval!` calls, one per resolved escalation)."
+  [runs approvals]
   (let [commit-runs (filter #(= :commit (:disposition (:result %))) runs)
         escalate-runs (filter #(= :escalate (:disposition (:result %))) runs)
         hold-runs (filter #(= :hold (:disposition (:result %))) runs)
-        resolved-labels (set (keys human-sign-offs))
+        resolved-labels (set (map :label approvals))
         pending-runs (remove #(resolved-labels (:label %)) escalate-runs)
         op-rows (str/join "\n" (map op-row runs))
         hold-rows (str/join "\n" (keep #(let [r (hold-row %)] (when (seq r) r)) hold-runs))
-        sign-off-rows (str/join "\n" (map sign-off-row human-sign-offs))
+        sign-off-rows (str/join "\n" (map sign-off-row approvals))
         pending-rows (str/join "\n" (map pending-escalation-row pending-runs))
         known-op-rows (str/join "\n" (map known-op-row (sort governor/known-ops)))
         blocked-op-rows (str/join "\n" (map blocked-op-row (sort governor/blocked-ops)))
@@ -249,7 +259,7 @@
      "  <section class=\"card\">\n"
      "    <h2>Operation log (" (count runs) " requests · "
      (count commit-runs) " commit / " (count escalate-runs) " escalate / " (count hold-runs) " hold)</h2>\n"
-     "    <p class=\"muted\">Demo snapshot — build-time-generated from <code>riceops.operation/run-operation</code> via <code>riceops.render-html</code> (<code>clojure -M:dev:render-html</code>), regenerated nightly.</p>\n"
+     "    <p class=\"muted\">Demo snapshot — build-time-generated from the compiled <code>riceops.operation/build</code> StateGraph via <code>riceops.render-html</code> (<code>clojure -M:dev:render-html</code>), regenerated nightly.</p>\n"
      "    <table>\n"
      "      <thead><tr><th>Run</th><th>Op</th><th>Field</th><th>Disposition</th><th>Basis</th></tr></thead>\n"
      "      <tbody>\n"
@@ -269,7 +279,7 @@
      "  </section>\n"
      "  <section class=\"card\">\n"
      "    <h2>Escalations — human sign-off</h2>\n"
-     "    <p class=\"muted\"><code>riceops.operation</code> is currently a synchronous stub with no langgraph resume API yet (see its docstring) — resolutions below are the farm operator's recorded out-of-band decision, not a second governor pass.</p>\n"
+     "    <p class=\"muted\">A resolved escalation below is a genuine checkpoint resume (<code>interrupt-before #{:request-approval}</code>, <code>langgraph.graph/run*</code> with <code>:resume? true</code>) through the compiled StateGraph — not a second governor pass and not a fabricated record. Only the reviewer's free-text note is renderer-authored.</p>\n"
      "    <table>\n"
      "      <thead><tr><th>Run</th><th>Resolution</th><th>Signed off by</th><th>Note</th></tr></thead>\n"
      "      <tbody>\n"
@@ -303,8 +313,10 @@
 
 (defn -main [& args]
   (let [out (or (first args) "docs/samples/operator-console.html")
-        runs (run-demo!)
-        html (render runs)]
+        actor (op/build (seed-store))
+        runs (run-demo! actor)
+        approvals [(resolve-approval! actor "escalate-1-crop-health-concern" "op-1")]
+        html (render runs approvals)]
     (when-let [parent (.getParentFile (java.io.File. ^String out))]
       (.mkdirs parent))
     (spit out html)
@@ -312,4 +324,5 @@
              (count runs) "runs,"
              (count (filter #(= :commit (:disposition (:result %))) runs)) "commit,"
              (count (filter #(= :escalate (:disposition (:result %))) runs)) "escalate,"
-             (count (filter #(= :hold (:disposition (:result %))) runs)) "hold )")))
+             (count (filter #(= :hold (:disposition (:result %))) runs)) "hold ·"
+             (count approvals) "escalation(s) resolved via real checkpoint resume )")))

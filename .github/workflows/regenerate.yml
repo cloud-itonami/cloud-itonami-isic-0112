@@ -9,17 +9,14 @@
 # JVM Clojure (clojure -M), matching this repo's own deps.edn aliases
 # (:run/:test/:lint all use clojure -M already).
 #
-# Checkout layout: this repo only -- deps.edn's top-level :deps is {}
-# (deliberately: "this rice-paddy vertical is SELF-CONTAINED", see
-# deps.edn's own comment) and the :dev alias's override-deps has no
-# matching dep to override, so no kotoba-lang sibling checkout is
-# actually required for `clojure -M:dev:render-html` to run (verified
-# locally: it runs to completion with no kotoba-lang/* directories
-# present at all). Unlike sibling verticals in this fleet that check
-# out kotoba-lang/langchain + kotoba-lang/langgraph (and sometimes
-# kotoba-lang/html, kotoba-lang/css, kotoba-lang/robotics) as build
-# siblings, adding those checkouts here would be dead weight this
-# repo's own deps.edn doesn't call for.
+# Checkout layout: `riceops.operation/build` now compiles a real
+# langgraph-clj StateGraph, so deps.edn's top-level :deps pins
+# kotoba-lang/langgraph + kotoba-lang/langchain-store via in-monorepo
+# :local/root paths (and :dev overrides langchain the same way) --
+# those don't resolve on a bare single-repo checkout, so this job
+# reconstructs the workspace layout by checking out all three siblings
+# (all PUBLIC) into the expected relative paths, same pattern as this
+# repo's own ci.yml / cloud-itonami-isic-0111's regenerate.yml.
 #
 # Fork note: this runs on the default GITHUB_TOKEN (contents: write).
 # If your org disables Actions, run `clojure -M:dev:render-html` from
@@ -38,9 +35,21 @@ jobs:
       - uses: actions/checkout@v4
         with:
           path: orgs/cloud-itonami/cloud-itonami-isic-0112
+      - uses: actions/checkout@v4
+        with:
+          repository: kotoba-lang/langgraph
+          path: orgs/kotoba-lang/langgraph
+      - uses: actions/checkout@v4
+        with:
+          repository: kotoba-lang/langchain
+          path: orgs/kotoba-lang/langchain
+      - uses: actions/checkout@v4
+        with:
+          repository: kotoba-lang/langchain-store
+          path: orgs/kotoba-lang/langchain-store
       - uses: actions/setup-java@v4
         with: { distribution: temurin, java-version: "21" }
-      - uses: DeLaGuardo/setup-clojure@13.0
+      - uses: DeLaGuardo/setup-clojure@13.4
         with: { cli: latest }
       - name: regenerate through the real actor
         working-directory: orgs/cloud-itonami/cloud-itonami-isic-0112
