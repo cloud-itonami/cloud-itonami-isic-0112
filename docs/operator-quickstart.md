@@ -20,10 +20,13 @@ cd cloud-itonami-isic-0112
 ## 2. Run tests
 
 ```bash
-clojure -M:test
+clojure -M:dev:test
 ```
 
 Expect green if maturity is `implemented`. Fix failures before operating.
+(`:dev:test` resolves `langgraph`/`langchain-store`/`langchain` via the
+in-monorepo sibling checkouts at `../../kotoba-lang/*`; a standalone fork
+should override those `:local/root` coordinates in `deps.edn` first.)
 
 ## 3. Open the product face
 
@@ -37,7 +40,9 @@ Publish: enable GitHub Pages on `main` `/docs`, or any static host.
 
 - Blueprint governor key: `paddy-operations-governor`
 - Likely source path: `riceops.governor.cljc`
-- Pattern: advise → govern → phase-gate → commit | escalate | hold (itonami actor / ADR-2607011000)
+- Pattern: intake → advise → govern → decide → commit | request-approval →
+  commit | hold, compiled to a `langgraph-clj` `StateGraph`
+  (`riceops.operation`, itonami actor / ADR-2607011000)
 
 ## 5. Claim / go-live
 
