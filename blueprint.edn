@@ -1,4 +1,4 @@
-{:itonami.blueprint/id "cloud-itonami-0112"
+{:itonami.blueprint/id "cloud-itonami-isic-0112"
  :itonami.blueprint/name "Rice-Paddy Operations Coordination"
  :itonami.blueprint/isic-rev5 "0112"
  :itonami.blueprint/domain :agriculture/rice-growing
