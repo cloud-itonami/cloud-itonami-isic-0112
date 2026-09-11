@@ -24,11 +24,11 @@ append-only audit ledger (`ledger`/`append-ledger!`), implemented on
 both `MemStore` and a `DatomicStore` (backed by `langchain.db` via
 `kotoba-lang/langchain-store`) that pass the same store-contract test
 (`test/riceops/store_contract_test.cljk`). The demo runner
-(`clojure -M:dev:run`) drives the compiled graph end-to-end through a
+(`kbb -M:dev:run`) drives the compiled graph end-to-end through a
 commit path, an escalate→approve→commit path, an escalate→reject→hold
 path, and a hard-hold path, printing the resulting audit ledger. The
 GitHub Pages operator console (`docs/samples/operator-console.html`,
-`clojure -M:dev:render-html`) is generated the same way, including a
+`kbb -M:dev:render-html`) is generated the same way, including a
 genuine checkpoint resume for one resolved escalation.
 
 ## What this does NOT do
@@ -141,10 +141,10 @@ paddy-specific water-level check added:
 - `riceops.operation` — compiles the `langgraph-clj` `StateGraph`: advise →
   govern → decide → commit | request-approval → commit | hold, with
   `interrupt-before` + checkpoint-based resume for escalated operations
-- `riceops.sim` — demo runner (`clojure -M:dev:run`)
+- `riceops.sim` — demo runner (`kbb -M:dev:run`)
 - `riceops.render-html` — build-time renderer for
   `docs/samples/operator-console.html`, driving the same compiled StateGraph
-  (`clojure -M:dev:render-html`)
+  (`kbb -M:dev:render-html`)
 
 ## Capability layer
 
@@ -162,9 +162,9 @@ See [`docs/business-model.md`](docs/business-model.md) and
 ## Testing
 
 ```bash
-clojure -M:dev:test   # run the test suite (langgraph/langchain-store resolved via local sibling checkouts)
-clojure -M:lint       # clj-kondo, 0 errors / 0 warnings
-clojure -M:dev:run    # demo runner -- drives the compiled StateGraph end-to-end
+kbb -M:dev:test   # run the test suite (langgraph/langchain-store resolved via local sibling checkouts)
+kbb -M:lint       # clj-kondo, 0 errors / 0 warnings
+kbb -M:dev:run    # demo runner -- drives the compiled StateGraph end-to-end
 ```
 
 `:dev` pins the transitive `langchain` dependency to the in-monorepo local
