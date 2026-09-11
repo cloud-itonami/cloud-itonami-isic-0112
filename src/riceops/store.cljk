@@ -13,7 +13,7 @@
                         `langchain.db`'s `:db-api` (see langchain.kotoba-db).
 
   Both implement the same protocol and pass the same contract
-  (test/riceops/store_contract_test.cljc).
+  (test/riceops/store_contract_test.cljk).
 
   A registered paddy field is the minimal unit of authority: a farm's
   paddy field must be registered before ANY proposal referencing it can be

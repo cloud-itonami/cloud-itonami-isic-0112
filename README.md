@@ -23,7 +23,7 @@ approval-rejected decision fact is appended to `riceops.store`'s
 append-only audit ledger (`ledger`/`append-ledger!`), implemented on
 both `MemStore` and a `DatomicStore` (backed by `langchain.db` via
 `kotoba-lang/langchain-store`) that pass the same store-contract test
-(`test/riceops/store_contract_test.cljc`). The demo runner
+(`test/riceops/store_contract_test.cljk`). The demo runner
 (`clojure -M:dev:run`) drives the compiled graph end-to-end through a
 commit path, an escalate→approve→commit path, an escalate→reject→hold
 path, and a hard-hold path, printing the resulting audit ledger. The

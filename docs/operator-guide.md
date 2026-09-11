@@ -113,7 +113,7 @@ integration:
 Implementations include in-memory `MemStore` (default, `riceops.store`) and
 a `DatomicStore` backed by `langchain.db` via `kotoba-lang/langchain-store`
 (the same seam point all cloud-itonami actors use); both pass the same
-store-contract test (`test/riceops/store_contract_test.cljc`).
+store-contract test (`test/riceops/store_contract_test.cljk`).
 
 ## Safety Guarantees
 
