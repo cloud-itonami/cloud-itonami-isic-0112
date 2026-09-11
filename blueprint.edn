@@ -37,4 +37,4 @@
  (`docs/samples/operator-console.html`) is generated at build time by
  actually running the compiled StateGraph, including a genuine
  checkpoint resume for one resolved escalation
- (`clojure -M:dev:render-html`)."}
+ (`kbb -M:dev:render-html`)."}
