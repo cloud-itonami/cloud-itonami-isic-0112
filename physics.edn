@@ -1,0 +1,41 @@
+;; What this vertical's robot physically does, declared for
+;; kotoba.robotics.process (kotoba-lang/robotics). `kbb -M:dev:physics` runs it.
+;;
+;; README "Robotics premise": a field-management robot keeps paddy records
+;; (acreage, yield, water level) and schedules planting / flooding-drainage /
+;; harvest for a rice farm (ISIC 0112). Its physical work: opening the paddy
+;; drain before harvest, pumping irrigation water into the paddy, and carrying
+;; seedling trays along the levee to the transplanter.
+;;
+;; Every number without a cited source is marked `estimate` in its :basis.
+;; Replacing an estimate with a sourced value is this bot's growth work.
+{:physics/schema "itonami.physical-ai.spec.v1"
+ :repo "cloud-itonami/cloud-itonami-isic-0112"
+ :cases
+ [{:id :paddy-drain-before-harvest
+   :kind :tank-drain
+   :procedure "robot opens the drain gate of a 10-are paddy and drains the standing water down to a wet-soil film"
+   :params {:tank-area-m2 1000.0 :h0-m 0.05 :h-target-m 0.005 :cd 0.60 :dt-s 5.0 :max-time-s 604800.0}
+   :sweep {:param :orifice-area-m2 :values [0.001 0.002 0.004 0.008 0.016]}
+   :quantity :time-to-target-s
+   :limit {:max 43200.0 :basis "estimate: the surface water should be off within one 12-hour drain operation (ignores seepage and rain)"}
+   :boundary {:lo 0.0005 :hi 0.05}}
+  {:id :irrigation-pump-to-paddy
+   :kind :pipe-flow
+   :procedure "pump lifts water from the irrigation canal through a 200 m pipe into the paddy inlet"
+   :params {:diameter-m 0.15 :length-m 200.0 :roughness-m 1.5e-6
+            :density-kg-m3 998.0 :viscosity-pa-s 1.0e-3 :pump-efficiency 0.60 :elevation-m 2.0}
+   :sweep {:param :q-m3s :values [0.01 0.02 0.03 0.04 0.05]}
+   :quantity :pump-power-w
+   :limit {:max 3700.0 :basis "estimate: rated shaft power of a 3.7 kW canal-side irrigation pump"}
+   :boundary {:lo 0.002 :hi 0.1}}
+  {:id :seedling-trays-along-levee
+   :kind :transport
+   :procedure "carrier drives a stack of rice seedling trays along the levee from the nursery to the transplanter"
+   :params {:mass-kg 80.0 :distance-m 150.0 :v-max-mps 1.0 :a-max-mps2 0.4
+            :brake-decel-mps2 0.8 :drive-force-n 250.0 :crr 0.08
+            :cog-height-m 0.50 :support-half-length-m 0.30 :max-time-s 3600.0}
+   :sweep {:param :payload-kg :values [40.0 80.0 120.0 160.0 200.0]}
+   :quantity :cycle-time-s
+   :limit {:max 170.0 :basis "estimate: tray resupply must keep up with one transplanter pass"}
+   :boundary {:lo 10.0 :hi 400.0}}]}
