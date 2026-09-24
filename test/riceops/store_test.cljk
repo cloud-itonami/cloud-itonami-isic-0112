@@ -1,5 +1,5 @@
 (ns riceops.store-test
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [kotoba.test :refer [deftest is testing]]
             [riceops.store :as store]))
 
 (deftest mem-store-creation
